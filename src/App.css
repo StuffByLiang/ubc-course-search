@@ -1,5 +1,18 @@
+body, html {
+  color: #353748;
+  background-color: #f7f7f7;
+  height: 100%;
+  /* background: linear-gradient(45deg, #8711c1 30%, #2472fc 100%); */
+}
+
+.gradient {
+  background: linear-gradient(45deg, #8711c1, #2472fc);
+  color: #f7f7f7;
+}
+
 .App {
   text-align: center;
+  /* background-color: gold; */
 }
 
 .App-logo {
