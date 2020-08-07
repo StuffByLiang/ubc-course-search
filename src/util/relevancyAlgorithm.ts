@@ -1,6 +1,5 @@
 import { Course } from '../_types/Course';
 import natural from 'natural';
-import Fuse from 'fuse.js'
 // import worker  from 'worker_threads';
 
 const TfIdf = natural.TfIdf;
@@ -10,74 +9,74 @@ interface Match {
   score: number
 }
 
-export async function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, fuse: Fuse<string>, tfidf: natural.TfIdf, wordSet: Set<string>): Promise<Array<Course>> {
+export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, tfidfString: string, wordSet: Set<string>): Array<Course> {
   /* 
    * 0. match all the words in the searchQuery to words in our set of words (tokenize the description)
    * 1. use tf-idf algorithm on description only to compute scores for each of the courses
    * 2. sort and return top 10 relevant courses
    */
   // var myWorker = new Worke  r('worker.js');
-  return new Promise((resolve, reject) => {
-    console.time("get related words")
+  console.time("get related words")
 
-    let list = new Array<string>();
+  const tfidf = new TfIdf(JSON.parse(tfidfString));
 
-    searchQuery.split(' ').map((query) => {
-      let {
-        perfectMatches,
-        prefixMatches,
-        substringMatches,
-        closeMatches
-      } = getMatches(query, wordSet);
+  let list = new Array<string>();
 
-      list = list.concat(perfectMatches.map((match) => match.word));
-      list = list.concat(prefixMatches.map((match) => match.word));
-      list = list.concat(substringMatches.map((match) => match.word));
+  searchQuery.split(' ').map((query) => {
+    let {
+      perfectMatches,
+      prefixMatches,
+      substringMatches,
+      closeMatches
+    } = getMatches(query, wordSet);
 
-      if(perfectMatches.length === 0 &&
-        prefixMatches.length === 0 &&
-        substringMatches.length === 0 &&
-        closeMatches.length > 1) {
-        list.push(closeMatches[0].word);
-      }
-      
-      // console.log("perfectMatch", perfectMatches)
-      // console.log("prefixMatches:", prefixMatches)
-      // console.log("substringMatches:", substringMatches)
-      // console.log("closeMatches:", closeMatches)
-    })
-    console.timeEnd("get related words")
+    list = list.concat(perfectMatches.map((match) => match.word));
+    list = list.concat(prefixMatches.map((match) => match.word));
+    list = list.concat(substringMatches.map((match) => match.word));
 
-    let measures: {
-      index: number,
-      measure: number
-    }[] = [];
+    if(perfectMatches.length === 0 &&
+      prefixMatches.length === 0 &&
+      substringMatches.length === 0 &&
+      closeMatches.length > 1) {
+      list.push(closeMatches[0].word);
+    }
+    
+    // console.log("perfectMatch", perfectMatches)
+    // console.log("prefixMatches:", prefixMatches)
+    // console.log("substringMatches:", substringMatches)
+    // console.log("closeMatches:", closeMatches)
+  })
+  console.timeEnd("get related words")
 
-    console.time("search")
-    list = list.splice(0, 25)
-    console.log(list)
-    tfidf.tfidfs(list, (index, measure) => {
-      if(measure !== 0) {
-        measures.push({
-          index,
-          measure
-        });
-      }
-    });
-    console.timeEnd("search")
+  let measures: {
+    index: number,
+    measure: number
+  }[] = [];
 
-    console.time("sort")
-    let results = measures
-      .sort((a, b) => {
-        return b.measure - a.measure;
-      })
-      .map((measure) => {
-        return allCourses[measure.index];
-      })
-    console.timeEnd("sort")
-
-    return resolve(results);
+  console.time("search")
+  list = list.splice(0, 25)
+  console.log(list)
+  tfidf.tfidfs(list, (index, measure) => {
+    if(measure !== 0) {
+      measures.push({
+        index,
+        measure
+      });
+    }
   });
+  console.timeEnd("search")
+
+  console.time("sort")
+  let results = measures
+    .sort((a, b) => {
+      return b.measure - a.measure;
+    })
+    .map((measure) => {
+      return allCourses[measure.index];
+    })
+  console.timeEnd("sort")
+
+  return results;
 }
 
 function getMatches(query: string, wordSet: Set<string>) {

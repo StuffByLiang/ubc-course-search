@@ -12,8 +12,16 @@ import { relevancyAlgorithm } from './util/relevancyAlgorithm';
 import { TfIdf } from 'natural';
 import natural from 'natural';
 
+import useDebounce from './hooks/useDebounce';
+
+// @ts-ignore
+import Worker from './util/algorithm.worker';
+
 // take the search query string and find all courses whose description, course title, or course name contain that string 
 // for every course in allCourses, map a relevancy score to another array, then return an array 
+
+const worker = new Worker();
+const tfidf = new TfIdf();
 
 const theme = createMuiTheme({
   typography: {
@@ -36,13 +44,22 @@ function App() {
   const classes = useStyles();
 
   const [allCourses, setAllCourses] = useState<Array<Course>>([]);
-  const [seachedCourses, setSearchedCourses] = useState<Course[]>([]);
+  const [searchedCourses, setSearchedCourses] = useState<Course[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [fuse, setFuse] = useState<Fuse<string>>(new Fuse([], {}));
-  const [tfidf, setTfidf] = useState<TfIdf>(new TfIdf());
   const [wordSet, setWordSet] = useState<Set<string>>(new Set<string>()); 
+
+  const debouncedSearchTerm = useDebounce(searchQuery, 500);
   
   useEffect(() => {
+    // set up worker listener
+    console.log(worker)
+    worker.onmessage = function (event: MessageEvent) {
+      console.timeEnd("recieved data from worker")
+      console.log(event.data);
+      setSearchedCourses(event.data.splice(0,10));
+      console.log(searchedCourses)
+    };
+
     // fetch all course data here and then call setAllCourses
     fetch('http://api.ubccourses.com/course')
       .then(result => result.json())
@@ -50,11 +67,9 @@ function App() {
         console.log(data);
         setAllCourses(data.courses);
 
-        let newTfidf = new TfIdf();
         data.courses.forEach((course: Course) => {  // this grabs every course description 
-          newTfidf.addDocument(course.description); 
+          tfidf.addDocument(course.description); 
         })
-        setTfidf(newTfidf);
 
         let newWordSet = new Set<string>();
 
@@ -67,34 +82,20 @@ function App() {
           })
         })
         setWordSet(newWordSet); 
-
-        const fuseObj = new Fuse<string>(Array.from(newWordSet), {
-          ignoreFieldNorm: true,
-          includeScore: true
-        });
-
-        setFuse(fuseObj);
       })
   }, []);
 
   useEffect(() => {
-    // console.time('search')
-    // let result = fuse.search(searchQuery).splice(0, 10);
-    // console.timeEnd('search')
-    // console.log(result)
-    // setSearchedCourses(result);
-    console.time("asynchronous call that shouldn't block")
-    let test = relevancyAlgorithm(searchQuery, allCourses, fuse, tfidf, wordSet)
-      .then((data) => {
+    // tell worker to run algorithm
+    console.time("recieved data from worker")
+    console.time('worker start')
+    // worker.terminate();
+    worker.postMessage({
+      searchQuery, allCourses, tfidf: JSON.stringify(tfidf), wordSet
+    });
+    console.timeEnd('worker start')
+  }, [debouncedSearchTerm]);
 
-        let results = searchQuery === "" ? [] : data.splice(0, 10);
-        setSearchedCourses(results);
-
-      })
-    console.log(test)
-    console.timeEnd("asynchronous call that shouldn't block")
-
-  }, [searchQuery]);
   return (
     <ThemeProvider theme={theme}>
       <div className="App">
@@ -118,8 +119,8 @@ function App() {
           </Container>
         </Box>
         <Container>
-          {seachedCourses.map((result) => 
-            <CourseCard course={result} />
+          {searchedCourses.map((course) => 
+            <CourseCard key={course.name} course={course} />
           )}
         </Container>
       </div>

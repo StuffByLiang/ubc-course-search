@@ -19,4 +19,5 @@ jobs:
         script: |
           cd ./node.js/ubc-course-search
           git pull
+          npm i
           npm run build
