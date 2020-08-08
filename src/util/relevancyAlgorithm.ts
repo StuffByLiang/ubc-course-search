@@ -16,56 +16,107 @@ interface Result {
 export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, engineString: string, wordSet: Set<string>): Array<Course> {
   /* 
    * 0. match all the words in the searchQuery to words in our set of words (tokenize the description)
-   * 1. use tf-idf algorithm on description only to compute scores for each of the courses
+     if one of the words in the search query input does not exist, then: 
+     match the word to a word that matches a phrase from our wordset and use that newSearchQuery in our searching algorithm 
+   * 1. use bm25 algorithm on description only to compute scores for each of the courses
    * 2. sort and return top 10 relevant courses
    */
   console.time("get related words")
 
-  let list = new Array<string>();
-  let closestWord: string = ""; 
-  searchQuery.trim().split(' ').map((query) => {
+  let list = new Array<string>(); // list of words similar or the same to the search query's words
+  let replacementWord: string = ""; 
+
+  let inputWords = searchQuery.trim().split(' ');  // gets the words from the search query 
+  console.log(inputWords); 
+
+
+
+
+  // we need to check that every word in the input string is valid, and if one word isn't then it needs to be replaced. 
+  // we are going to replace in order of 
+  // 1. check if the word is a prefix 
+  // 2. check if the word is a substring 
+  // 3. check if the word has a close match 
+  // grab the highest priority word then we're good.
+  for(let i = 0; i < inputWords.length; i++) {
     let {
       perfectMatches,
       prefixMatches,
       substringMatches,
       closeMatches
-    } = getMatches(query, wordSet);
+    } = getMatches(inputWords[i], wordSet);
+    if(perfectMatches.length === 0){  // if this word doesnt have a perfect match find a replacement  
+      console.log("prefix matches:",prefixMatches); 
+      console.log("substringMatches:", substringMatches)
+     console.log("closeMatches:", closeMatches)
+      
+      if(prefixMatches.length !== 0) {
+       inputWords[i] = prefixMatches[0].word; 
+      } else if (substringMatches.length !== 0) {
+        inputWords[i] = substringMatches[i].word; 
+      } else {
+        if(closeMatches.length > 0) {
+          inputWords[i] = closeMatches[0].word; 
+        }
+      }
+    }
+  }
 
-    list = list.concat(perfectMatches.map((match) => match.word));
-    list = list.concat(prefixMatches.map((match) => match.word));
-    list = list.concat(substringMatches.map((match) => match.word));
-    if(closeMatches.length > 1) {
-    closestWord = closeMatches[0].word;
-    }
-    if(perfectMatches.length === 0 &&
-      prefixMatches.length === 0 &&
-      substringMatches.length === 0 &&
-      closeMatches.length > 1) {
-      list.push(closeMatches[0].word);
-    }
     
-    // console.log("perfectMatch", perfectMatches)
-    // console.log("prefixMatches:", prefixMatches)
-    // console.log("substringMatches:", substringMatches)
-    // console.log("closeMatches:", closeMatches)
-  })
+  // inputWords.map((query) => {
+  //   let {
+  //     perfectMatches,
+  //     prefixMatches,
+  //     substringMatches,
+  //     closeMatches
+  //   } = getMatches(query, wordSet);
+
+  //   list = list.concat(perfectMatches.map((match) => match.word));
+  //   list = list.concat(prefixMatches.map((match) => match.word));
+  //   list = list.concat(substringMatches.map((match) => match.word));
+
+  //   // if(perfectMatches.length === 0 && prefixMatches.length !== 0) {
+  //   //   replacementWord = prefixMatches[0].word; 
+  //   // } else if (prefixMatches.length === 0 && substringMatches.length !== 0) {
+  //   //   replacementWord = substringMatches[0].word; 
+  //   // } else  {
+  //   //   replacementWord = closeMatches[0].word;
+  //   // }
+
+  //   if(perfectMatches.length === 0 &&
+  //     prefixMatches.length === 0 &&
+  //     substringMatches.length === 0 &&
+  //     closeMatches.length > 1) {
+  //     list.push(closeMatches[0].word);
+  //   }
+    
+
+  //   // console.log("perfectMatch", perfectMatches)
+  //   // console.log("prefixMatches:", prefixMatches)
+  //   // console.log("substringMatches:", substringMatches)
+  //   // console.log("closeMatches:", closeMatches)
+  // })
+
+  let newSearchQuery = inputWords.toString(); 
+  console.log("new input: " + newSearchQuery); 
+  
   list = list.splice(0, 25)
-  console.log(list)
+  console.log("list:" + list)
   console.timeEnd("get related words")
 
   console.time("bm25 search")
-  let results: Array<Result> = bm25Search(allCourses, searchQuery, engineString);
+  let results: Array<Result> = bm25Search(allCourses, newSearchQuery, engineString);
   console.log(results)
   console.timeEnd("bm25 search")
  
-  if(results.length === 0) {
+  // if(results.length === 0) {
     
-    //
-    // TODO: make this part below into a prompt 
-    // 
-    console.log(closestWord); 
-    results = bm25Search(allCourses, closestWord, engineString);  
-  }
+  //   //
+  //   // TODO: make this part below into a prompt 
+  //   // 
+  //   console.log(replacementWord); 
+  //   results = bm25Search(allCourses, replacementWord, engineString);  
+  // }
 
   return results.map((result) => {
     return result.course;
@@ -90,6 +141,7 @@ function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString
         score: measure[1]
       };
     });
+   
    
   return results;
 }
