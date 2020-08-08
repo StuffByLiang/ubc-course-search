@@ -24,7 +24,7 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
   console.time("get related words")
 
   let list = new Array<string>();
-
+  let closestWord: string = ""; 
   searchQuery.trim().split(' ').map((query) => {
     let {
       perfectMatches,
@@ -36,7 +36,9 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
     list = list.concat(perfectMatches.map((match) => match.word));
     list = list.concat(prefixMatches.map((match) => match.word));
     list = list.concat(substringMatches.map((match) => match.word));
-
+    if(closeMatches.length > 1) {
+    closestWord = closeMatches[0].word;
+    }
     if(perfectMatches.length === 0 &&
       prefixMatches.length === 0 &&
       substringMatches.length === 0 &&
@@ -52,7 +54,7 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
   list = list.splice(0, 25)
   console.log(list)
   console.timeEnd("get related words")
-
+  console.log("close matches" + list); 
   let results: Array<Result> = [];
 
   switch(engineType) {
@@ -71,10 +73,27 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
 
   console.time("bm25 search")
   console.timeEnd("bm25 search")
-
+ 
+  if(results.length !== 0) {
   return results.map((result) => {
+    
     return result.course;
+  
   });
+  } else{
+    
+    //
+    // TODO: make this part below into a prompt 
+    // 
+    console.log(closestWord); 
+    results = findSuggestedCourses(allCourses, closestWord, engineString, engineType);  
+    return results.map((result) => {
+    
+      return result.course;
+    
+    });
+
+  }
 }
 
 function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString: string, limit: number = 10): Array<Result>  {
@@ -95,7 +114,7 @@ function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString
         score: measure[1]
       };
     });
-
+   
   return results;
 }
 
@@ -119,6 +138,20 @@ function tfidfSearch(allCourses: Array<Course>, searchQuery: string, engineStrin
 
   return results.splice(0, limit);
 } 
+
+function findSuggestedCourses(allCourses: Array<Course>,searchQuery: string, engineString: string, engineType: string): Array<Result> {
+  let results = new Array<Result>(); 
+  switch(engineType) {
+    case "tfidf":
+      results = tfidfSearch(allCourses, searchQuery, engineString);
+      break;
+    case "bm25":
+    default:
+      results = bm25Search(allCourses, searchQuery, engineString);
+  }
+  return results; 
+
+}
 
 function getMatches(query: string, wordSet: Set<string>) {
   let results = Array.from(wordSet).map((word) => {
