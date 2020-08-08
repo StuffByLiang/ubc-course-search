@@ -3,15 +3,11 @@ import logo from './logo_white.svg';
 import './App.css';
 
 import { Course } from './_types/Course';
-import { TextField, Container, ThemeProvider, createMuiTheme, InputBase, Paper, makeStyles, Collapse, FormControlLabel, Switch, IconButton, Divider, FormControl, InputLabel, Select, MenuItem } from '@material-ui/core';
+import { TextField, Container, ThemeProvider, createMuiTheme, InputBase, Paper, makeStyles, Collapse, FormControlLabel, Switch, IconButton, Divider, FormControl, InputLabel, Select, MenuItem, LinearProgress, CircularProgress, Grid } from '@material-ui/core';
 import SearchIcon from '@material-ui/icons/Search';
 import MoreVertIcon from '@material-ui/icons/MoreVert';
 import Box from '@material-ui/core/Box';
 import CourseCard from './components/CourseCard';
-import Fuse from 'fuse.js'
-import { relevancyAlgorithm } from './util/relevancyAlgorithm';
-import { TfIdf } from 'natural';
-import natural from 'natural'
 import bm25 from 'wink-bm25-text-search';
 import nlp from 'wink-nlp-utils'
 
@@ -19,13 +15,12 @@ import useDebounce from './hooks/useDebounce';
 
 // @ts-ignore
 import Worker from './util/algorithm.worker';
-import { constants } from 'http2';
 
-// take the search query string and find all courses whose description, course title, or course name contain that string 
-// for every course in allCourses, map a relevancy score to another array, then return an array 
+// // take the search query string and find all courses whose description, course title, or course name contain that string 
+// // for every course in allCourses, map a relevancy score to another array, then return an array 
 
 const worker = new Worker();
-const tfidf = new TfIdf();
+
 const engine = bm25();
 
 const pipe = [
@@ -39,7 +34,13 @@ engine.definePrepTasks( pipe );
 
 
 const theme = createMuiTheme({
-  typography: {
+  palette: {
+    primary: {
+      main: "#8711c1"
+    },
+    secondary: {
+      main: "#2472fc"
+    }
   },
 });
 
@@ -60,6 +61,9 @@ const useStyles = makeStyles((theme) => ({
   },
   formControl: {
     alignItems: 'left',
+  },
+  loadingBar: {
+    padding: '15px 0',
   }
 }));
 
@@ -72,6 +76,7 @@ function App() {
   const [advancedOptions, setAdvancedOptions] = useState<boolean>(false);
   const [wordSet, setWordSet] = useState<Set<string>>(new Set<string>()); 
   const [engineType, setEngineType] = useState<string>("bm25"); 
+  const [searching, setSearching] = useState<boolean>(false);
 
   const debouncedSearchTerm = useDebounce(searchQuery, 500);
   
@@ -80,59 +85,54 @@ function App() {
     console.log(worker)
     worker.onmessage = function (event: MessageEvent) {
       console.timeEnd("recieved data from worker")
-      console.log(event.data);
-      setSearchedCourses(event.data.splice(0,10));
-      console.log(searchedCourses)
+      setSearchedCourses(event.data);
+      console.log(searchedCourses);
+      setSearching(false);
     };
 
     // fetch all course data here and then call setAllCourses
     fetch('https://api.ubccourses.com/course')
       .then(result => result.json())
       .then(data => {
-        console.log(data);
         setAllCourses(data.courses);
 
         data.courses.forEach((course: Course, i: number) => {  // this grabs every course description 
-          tfidf.addDocument(course.description); 
           engine.addDoc(course, i);
         })
         engine.consolidate();
 
         let newWordSet = new Set<string>();
 
-        var tokenizer = new natural.WordTokenizer();
-        data.courses.forEach((course: Course) => {  
-          let words = tokenizer.tokenize(course.description); 
-          words = words.concat(tokenizer.tokenize(course.title)) ;
-          words = words.concat(tokenizer.tokenize(course.name)); 
-          // console.log(words); 
+        data.courses.forEach((course: Course) => { 
+          let words = nlp.string.tokenize0(course.description); 
+          words = words.concat(nlp.string.tokenize0(course.title));
+          words = words.concat(nlp.string.tokenize0(course.name)); 
           words.forEach((word: string) => {
             newWordSet.add(word.toLowerCase()); 
           })
         })
+        console.log(newWordSet);
         setWordSet(newWordSet); 
+      })
+      .catch(err => {
+        alert(err)
+        console.error(err)
       })
   }, []);
 
   useEffect(() => {
     // tell worker to run algorithm
-    console.time("recieved data from worker")
-    console.time('worker start')
-    let engineString;
-
-    switch(engineType) {
-      case "tfidf":
-        engineString = JSON.stringify(tfidf);
-        break;
-      case "bm25":
-      default:
-        engineString = engine.exportJSON();
+    if(debouncedSearchTerm !== "") {
+      console.time("recieved data from worker")
+      console.time('worker start')
+      let engineString = engine.exportJSON();
+      
+      worker.postMessage({
+        searchQuery, allCourses, engineString,  wordSet
+      });
+      setSearching(true);
+      console.timeEnd('worker start')
     }
-    
-    worker.postMessage({
-      searchQuery, allCourses, engineType, engineString,  wordSet
-    });
-    console.timeEnd('worker start')
   }, [debouncedSearchTerm, engineType, allCourses]);
 
   return (
@@ -140,19 +140,21 @@ function App() {
       <div className="App">
         <Box className="gradient" pb={5}>
           <Container>
-            <img src={logo} className="App-logo" alt="logo" />
-            <p>
-              <code>The best UBC course searcher</code>
-            </p>
+            <div className="center">
+              <img src={logo} className="App-logo" alt="logo" />
+              <p>
+                <code>The best UBC course searcher</code>
+              </p>
+            </div>
             <Paper elevation={7} className={classes.root}>
               <Box className={classes.searchBar}>
-                <SearchIcon color="primary" />
+                <SearchIcon color="secondary" />
                 <InputBase
                   className={classes.input}
                   fullWidth
                   value={searchQuery}
                   onChange={(e)=>setSearchQuery(e.target.value)}
-                  placeholder="Search Course"
+                  placeholder="Search Course.. eg Anime, or Greek Mythology"
                   inputProps={{ 'aria-label': 'search course' }}
                   />
                   <IconButton className={classes.iconButton} onClick={() => setAdvancedOptions((prev) => !prev)} color="primary">
@@ -162,26 +164,32 @@ function App() {
                 <Collapse in={advancedOptions}>
                   <Divider />
                   <Box p={1}>
-                    <FormControl
-                      className={classes.formControl}
-                    >
-                      <InputLabel id="search engine">Search Engine</InputLabel>
-                      <Select
-                        labelId="search engine"
-                        id="search engine"
-                        value={engineType}
-                        onChange={(e) => setEngineType(e.target.value as string)}
-                      >
-                        <MenuItem value="bm25">bm25 (default, recommended)</MenuItem>
-                        <MenuItem value="tfidf">tfidf</MenuItem>
-                      </Select>
-                    </FormControl>
+                    <Grid container>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl
+                          fullWidth
+                          className={classes.formControl}
+                        >
+                          <InputLabel id="search engine">Search Engine</InputLabel>
+                          <Select
+                            labelId="search engine"
+                            id="search engine"
+                            value={engineType}
+                            onChange={(e) => setEngineType(e.target.value as string)}
+                          >
+                            <MenuItem value="bm25">bm25 (default, recommended)</MenuItem>
+                            {/* <MenuItem value="tfidf">tfidf</MenuItem> */}
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
                   </Box>
                 </Collapse>
             </Paper>
           </Container>
         </Box>
-        <Container>
+        <Container className="center">
+          {searching && <CircularProgress className={classes.loadingBar} color="primary" />}
           {searchedCourses.map((course) => 
             <CourseCard key={course.name} course={course} />
           )}

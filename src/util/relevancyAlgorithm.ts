@@ -1,9 +1,7 @@
 import { Course } from '../_types/Course';
-import natural from 'natural';
 import bm25 from 'wink-bm25-text-search';
 import nlp from 'wink-nlp-utils';
-
-const TfIdf = natural.TfIdf;
+import LevenshteinDistance from 'js-levenshtein';
 
 interface Match {
   word: string,
@@ -15,7 +13,7 @@ interface Result {
   score: number
 }
 
-export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, engineType: string, engineString: string, wordSet: Set<string>): Array<Course> {
+export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, engineString: string, wordSet: Set<string>): Array<Course> {
   /* 
    * 0. match all the words in the searchQuery to words in our set of words (tokenize the description)
    * 1. use tf-idf algorithm on description only to compute scores for each of the courses
@@ -53,23 +51,9 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
   console.log(list)
   console.timeEnd("get related words")
 
-  let results: Array<Result> = [];
-
-  switch(engineType) {
-    case "tfidf":
-      results = tfidfSearch(allCourses, searchQuery, engineString);
-      break;
-    case "bm25":
-    default:
-      results = bm25Search(allCourses, searchQuery, engineString);
-  }
-
-  console.log(results)
-
-  console.time("tfidf search")
-  console.timeEnd("tfidf search")
-
   console.time("bm25 search")
+  let results: Array<Result> = bm25Search(allCourses, searchQuery, engineString);
+  console.log(results)
   console.timeEnd("bm25 search")
 
   return results.map((result) => {
@@ -99,26 +83,26 @@ function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString
   return results;
 }
 
-function tfidfSearch(allCourses: Array<Course>, searchQuery: string, engineString: string, limit: number = 10): Array<Result> {
-  const tfidf = new TfIdf(JSON.parse(engineString));
+// function tfidfSearch(allCourses: Array<Course>, searchQuery: string, engineString: string, limit: number = 10): Array<Result> {
+//   const tfidf = new TfIdf(JSON.parse(engineString));
 
-  let results: Array<Result> = [];
+//   let results: Array<Result> = [];
 
-  tfidf.tfidfs(searchQuery, (index, score) => {
-    if(score !== 0) {
-      results.push({
-        course: allCourses[index],
-        score
-      });
-    }
-  });
+//   tfidf.tfidfs(searchQuery, (index, score) => {
+//     if(score !== 0) {
+//       results.push({
+//         course: allCourses[index],
+//         score
+//       });
+//     }
+//   });
 
-  results = results.sort((a, b) => {
-    return b.score - a.score;
-  })
+//   results = results.sort((a, b) => {
+//     return b.score - a.score;
+//   })
 
-  return results.splice(0, limit);
-} 
+//   return results.splice(0, limit);
+// } 
 
 function getMatches(query: string, wordSet: Set<string>) {
   let results = Array.from(wordSet).map((word) => {
@@ -181,7 +165,7 @@ function getMatchingScore(searchQuery:string, target: string) : number {
     return 1 + searchQuery.length / target.length;
   }
 
-  return 1 - natural.LevenshteinDistance(searchQuery, target)/target.length;
+  return 1 - LevenshteinDistance(searchQuery, target)/target.length;
 }
 
 /**

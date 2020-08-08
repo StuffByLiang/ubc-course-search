@@ -10,9 +10,9 @@ body, html {
   color: #f7f7f7;
 }
 
-.App {
-  text-align: center;
+.center {
   /* background-color: gold; */
+  text-align: center;
 }
 
 .App-logo {
