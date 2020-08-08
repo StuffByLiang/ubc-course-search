@@ -5,9 +5,9 @@ import { relevancyAlgorithm } from './relevancyAlgorithm';
 onmessage = (event) => {
   console.log('Message received from main script');
   
-  const { searchQuery, allCourses, tfidf, wordSet } = event.data;
+  const { searchQuery, allCourses, engineType, engineString, wordSet } = event.data;
 
-  let results = relevancyAlgorithm(searchQuery, allCourses, tfidf, wordSet);
+  let results = relevancyAlgorithm(searchQuery, allCourses, engineType, engineString, wordSet);
 
   console.log('Sending message back to main script');
 

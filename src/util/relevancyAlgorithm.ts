@@ -1,6 +1,7 @@
 import { Course } from '../_types/Course';
 import natural from 'natural';
-// import worker  from 'worker_threads';
+import bm25 from 'wink-bm25-text-search';
+import nlp from 'wink-nlp-utils';
 
 const TfIdf = natural.TfIdf;
 
@@ -9,20 +10,22 @@ interface Match {
   score: number
 }
 
-export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, tfidfString: string, wordSet: Set<string>): Array<Course> {
+interface Result {
+  course: Course,
+  score: number
+}
+
+export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, engineType: string, engineString: string, wordSet: Set<string>): Array<Course> {
   /* 
    * 0. match all the words in the searchQuery to words in our set of words (tokenize the description)
    * 1. use tf-idf algorithm on description only to compute scores for each of the courses
    * 2. sort and return top 10 relevant courses
    */
-  // var myWorker = new Worke  r('worker.js');
   console.time("get related words")
-
-  const tfidf = new TfIdf(JSON.parse(tfidfString));
 
   let list = new Array<string>();
 
-  searchQuery.split(' ').map((query) => {
+  searchQuery.trim().split(' ').map((query) => {
     let {
       perfectMatches,
       prefixMatches,
@@ -46,38 +49,76 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
     // console.log("substringMatches:", substringMatches)
     // console.log("closeMatches:", closeMatches)
   })
-  console.timeEnd("get related words")
-
-  let measures: {
-    index: number,
-    measure: number
-  }[] = [];
-
-  console.time("search")
   list = list.splice(0, 25)
   console.log(list)
-  tfidf.tfidfs(list, (index, measure) => {
-    if(measure !== 0) {
-      measures.push({
-        index,
-        measure
-      });
-    }
-  });
-  console.timeEnd("search")
+  console.timeEnd("get related words")
 
-  console.time("sort")
-  let results = measures
-    .sort((a, b) => {
-      return b.measure - a.measure;
-    })
-    .map((measure) => {
-      return allCourses[measure.index];
-    })
-  console.timeEnd("sort")
+  let results: Array<Result> = [];
+
+  switch(engineType) {
+    case "tfidf":
+      results = tfidfSearch(allCourses, searchQuery, engineString);
+      break;
+    case "bm25":
+    default:
+      results = bm25Search(allCourses, searchQuery, engineString);
+  }
+
+  console.log(results)
+
+  console.time("tfidf search")
+  console.timeEnd("tfidf search")
+
+  console.time("bm25 search")
+  console.timeEnd("bm25 search")
+
+  return results.map((result) => {
+    return result.course;
+  });
+}
+
+function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString: string, limit: number = 10): Array<Result>  {
+  const pipe = [
+    nlp.string.lowerCase,
+    nlp.string.tokenize0,
+    // nlp.tokens.stem
+  ];
+
+  const engine = bm25();
+  engine.importJSON(engineString);
+  engine.definePrepTasks(pipe);
+
+  let results: Array<Result> = engine.search(searchQuery, limit)
+    .map((measure: any) => {
+      return {
+        course: allCourses[measure[0]],
+        score: measure[1]
+      };
+    });
 
   return results;
 }
+
+function tfidfSearch(allCourses: Array<Course>, searchQuery: string, engineString: string, limit: number = 10): Array<Result> {
+  const tfidf = new TfIdf(JSON.parse(engineString));
+
+  let results: Array<Result> = [];
+
+  tfidf.tfidfs(searchQuery, (index, score) => {
+    if(score !== 0) {
+      results.push({
+        course: allCourses[index],
+        score
+      });
+    }
+  });
+
+  results = results.sort((a, b) => {
+    return b.score - a.score;
+  })
+
+  return results.splice(0, limit);
+} 
 
 function getMatches(query: string, wordSet: Set<string>) {
   let results = Array.from(wordSet).map((word) => {
