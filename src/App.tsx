@@ -143,7 +143,7 @@ function App() {
             <div className="center">
               <img src={logo} className="App-logo" alt="logo" />
               <p>
-                <code>The best UBC course searcher</code>
+                <code>The best UBC course searcher. Try 'anime', or 'greek mythology'!</code>
               </p>
             </div>
             <Paper elevation={7} className={classes.root}>
@@ -154,7 +154,7 @@ function App() {
                   fullWidth
                   value={searchQuery}
                   onChange={(e)=>setSearchQuery(e.target.value)}
-                  placeholder="Search Course.. eg Anime, or Greek Mythology"
+                  placeholder="Search Course"
                   inputProps={{ 'aria-label': 'search course' }}
                   />
                   <IconButton className={classes.iconButton} onClick={() => setAdvancedOptions((prev) => !prev)} color="primary">

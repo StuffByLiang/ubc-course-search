@@ -25,7 +25,7 @@ function CourseCard({ course }: Props) {
           {course.description}
         </CardContent>
         <CardActions>
-          <Button color = "primary" variant = "outlined" target="_blank" size="small" href={course.link}>
+          <Button className="gradient" color="primary" variant= "contained" target="_blank" size="small" href={course.link}>
             SSC Link
           </Button>
         </CardActions>
