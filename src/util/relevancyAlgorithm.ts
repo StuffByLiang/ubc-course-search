@@ -22,7 +22,7 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
   console.time("get related words")
 
   let list = new Array<string>();
-
+  let closestWord: string = ""; 
   searchQuery.trim().split(' ').map((query) => {
     let {
       perfectMatches,
@@ -34,7 +34,9 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
     list = list.concat(perfectMatches.map((match) => match.word));
     list = list.concat(prefixMatches.map((match) => match.word));
     list = list.concat(substringMatches.map((match) => match.word));
-
+    if(closeMatches.length > 1) {
+    closestWord = closeMatches[0].word;
+    }
     if(perfectMatches.length === 0 &&
       prefixMatches.length === 0 &&
       substringMatches.length === 0 &&
@@ -55,6 +57,15 @@ export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course
   let results: Array<Result> = bm25Search(allCourses, searchQuery, engineString);
   console.log(results)
   console.timeEnd("bm25 search")
+ 
+  if(results.length === 0) {
+    
+    //
+    // TODO: make this part below into a prompt 
+    // 
+    console.log(closestWord); 
+    results = bm25Search(allCourses, closestWord, engineString);  
+  }
 
   return results.map((result) => {
     return result.course;
@@ -79,7 +90,7 @@ function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString
         score: measure[1]
       };
     });
-
+   
   return results;
 }
 
