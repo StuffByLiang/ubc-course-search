@@ -1,20 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import ReactGA from 'react-ga';
 import logo from './logo_white.svg';
 import './App.css';
 
-import { Course } from './_types/Course';
-import { TextField, Container, ThemeProvider, createMuiTheme, InputBase, Paper, makeStyles, Collapse, FormControlLabel, Switch, IconButton, Divider, FormControl, InputLabel, Select, MenuItem, LinearProgress, CircularProgress, Grid } from '@material-ui/core';
-import SearchIcon from '@material-ui/icons/Search';
+import { Course } from './_types/';
+import { Link, Container, ThemeProvider, createMuiTheme, InputBase, Paper, makeStyles, Collapse, IconButton, Divider, FormControl, InputLabel, Select, MenuItem, LinearProgress, CircularProgress, Grid } from '@material-ui/core';
 import MoreVertIcon from '@material-ui/icons/MoreVert';
 import Box from '@material-ui/core/Box';
-import CourseCard from './components/CourseCard';
+import SearchIcon from '@material-ui/icons/Search';
+import SearchResults from './components/SearchResults';
+import SearchSuggestionBox from './components/SearchSuggestionBox';
+import AdvancedOptions from './components/AdvancedOptions';
 import bm25 from 'wink-bm25-text-search';
 import nlp from 'wink-nlp-utils'
+
+import * as typeformEmbed from '@typeform/embed'
+
 
 import useDebounce from './hooks/useDebounce';
 
 // @ts-ignore
 import Worker from './util/algorithm.worker';
+
+import allCourses from './data/courses.json';
+import allSubjects from './data/subjects.json';
+import allSectionInfos from './data/sectionInfos.json';
 
 // // take the search query string and find all courses whose description, course title, or course name contain that string 
 // // for every course in allCourses, map a relevancy score to another array, then return an array 
@@ -31,7 +41,6 @@ const pipe = [
 
 engine.defineConfig( { fldWeights: { name: 3, title: 2, description: 1 } } );
 engine.definePrepTasks( pipe );
-
 
 const theme = createMuiTheme({
   palette: {
@@ -67,60 +76,68 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
+const typeform = typeformEmbed.makePopup(
+  'https://stuffbyliangtypeform.typeform.com/to/SABcahTa',
+  {
+  }
+);
+
 function App() {
   const classes = useStyles();
+  console.log("hello")
 
-  const [allCourses, setAllCourses] = useState<Array<Course>>([]);
+  // const [allCourses, setAllCourses] = useState<Array<Course>>([]);
   const [searchedCourses, setSearchedCourses] = useState<Course[]>([]);
+  const [notFound, setNotFound] = useState<boolean>(false);
+  const [suggestions, setSuggestions] = useState<Array<string>>([]);
+
+  const [filteredCourses, setFilteredCourses] = useState<Course[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [advancedOptions, setAdvancedOptions] = useState<boolean>(false);
   const [wordSet, setWordSet] = useState<Set<string>>(new Set<string>()); 
-  const [engineType, setEngineType] = useState<string>("bm25"); 
+  const [courseLevelRange, setCourseLevelRange] = useState<[number, number]>([0, 9]); 
+  const [subjectSetFilter, setSubjectSetFilter] = useState<Set<string>>(new Set<string>()); 
+  const [suggestionsLimit, setSuggestionsLimit] = useState<number>(4); 
+  const [displayLimit, setDisplayLimit] = useState<number>(10); 
   const [searching, setSearching] = useState<boolean>(false);
 
-  const debouncedSearchTerm = useDebounce(searchQuery, 500);
+  const debouncedSearchTerm: string = useDebounce(searchQuery, 500);
+  const debouncedDisplayLimit: number = useDebounce(displayLimit, 1000);
   
   useEffect(() => {
     // set up worker listener
-    console.log(worker)
     worker.onmessage = function (event: MessageEvent) {
       console.timeEnd("recieved data from worker")
-      setSearchedCourses(event.data);
-      console.log(searchedCourses);
+
+      console.log(event.data);
+      
+      setSearchedCourses(event.data.result);
+      setSuggestions(event.data.suggestions)
+      setNotFound(event.data.notFound)
       setSearching(false);
     };
 
-    // fetch all course data here and then call setAllCourses
-    fetch('https://api.ubccourses.com/course')
-      .then(result => result.json())
-      .then(data => {
-        setAllCourses(data.courses);
+    allCourses.forEach((course: Course, i: number) => {  // this grabs every course description 
+      engine.addDoc(course, i);
+    });
+    engine.consolidate();
 
-        data.courses.forEach((course: Course, i: number) => {  // this grabs every course description 
-          engine.addDoc(course, i);
-        })
-        engine.consolidate();
+    let newWordSet = new Set<string>();
 
-        let newWordSet = new Set<string>();
-
-        data.courses.forEach((course: Course) => { 
-          let words = nlp.string.tokenize0(course.description); 
-          words = words.concat(nlp.string.tokenize0(course.title));
-          words = words.concat(nlp.string.tokenize0(course.name)); 
-          words.forEach((word: string) => {
-            newWordSet.add(word.toLowerCase()); 
-          })
-        })
-        console.log(newWordSet);
-        setWordSet(newWordSet); 
+    allCourses.forEach((course: Course) => { 
+      let words = nlp.string.tokenize0(course.description); 
+      words = words.concat(nlp.string.tokenize0(course.title));
+      words = words.concat(nlp.string.tokenize0(course.name)); 
+      words.forEach((word: string) => {
+        newWordSet.add(word.toLowerCase()); 
       })
-      .catch(err => {
-        alert(err)
-        console.error(err)
-      })
+    })
+    console.log(newWordSet);
+    setWordSet(newWordSet); 
   }, []);
 
   useEffect(() => {
+    console.log('run algo')
     // tell worker to run algorithm
     if(debouncedSearchTerm !== "") {
       console.time("recieved data from worker")
@@ -132,8 +149,35 @@ function App() {
       });
       setSearching(true);
       console.timeEnd('worker start')
+
+      
+      ReactGA.event({
+        category: "search",
+        action: "search",
+        label: debouncedSearchTerm,
+      });
     }
-  }, [debouncedSearchTerm, engineType, allCourses]);
+  }, [debouncedSearchTerm, wordSet]);
+
+  useEffect(() => {
+    function filterCourses(courses: Array<Course>, subjectSetFilter: Set<string>, courseLevelRange: [number, number]) {
+      return courses.filter((course) => {
+        // filter by year level
+        let level = parseInt(course.course[0]);
+    
+        return isNaN(level) || (level >= courseLevelRange[0] && level <= courseLevelRange[1]);
+      }).filter((course) => {
+        // filter by subjects
+        return subjectSetFilter.size === 0 ? true : subjectSetFilter.has(course.subject);
+      })
+    }
+
+    // run when filter options have been updated
+    console.log('run filter')
+    let result = filterCourses(searchedCourses, subjectSetFilter, courseLevelRange);
+    result = result.splice(0, debouncedDisplayLimit);
+    setFilteredCourses(result);
+  }, [debouncedDisplayLimit, subjectSetFilter, courseLevelRange, searchedCourses])
 
   return (
     <ThemeProvider theme={theme}>
@@ -163,37 +207,38 @@ function App() {
                 </Box>
                 <Collapse in={advancedOptions}>
                   <Divider />
-                  <Box p={1}>
-                    <Grid container>
-                      <Grid item xs={12} sm={6}>
-                        <FormControl
-                          fullWidth
-                          className={classes.formControl}
-                        >
-                          <InputLabel id="search engine">Search Engine</InputLabel>
-                          <Select
-                            labelId="search engine"
-                            id="search engine"
-                            value={engineType}
-                            onChange={(e) => setEngineType(e.target.value as string)}
-                          >
-                            <MenuItem value="bm25">bm25 (default, recommended)</MenuItem>
-                            {/* <MenuItem value="tfidf">tfidf</MenuItem> */}
-                          </Select>
-                        </FormControl>
-                      </Grid>
-                    </Grid>
-                  </Box>
+                  <AdvancedOptions
+                    displayLimit={displayLimit}
+                    setDisplayLimit={setDisplayLimit}
+                    suggestionsLimit={suggestionsLimit}
+                    setSuggestionsLimit={setSuggestionsLimit}
+                    courseLevelRange={courseLevelRange}
+                    setCourseLevelRange={setCourseLevelRange}
+                    setSubjectSetFilter={setSubjectSetFilter}
+                  />
                 </Collapse>
             </Paper>
+            <div className="link-container">
+              <Link href="#" onClick={() => typeform.open()}>Feedback / suggestions</Link>
+            </div>
           </Container>
         </Box>
         <Container className="center">
+          {(filteredCourses.length !== 0 || notFound) &&
+            <SearchSuggestionBox
+              notFound={notFound}
+              suggestions={suggestions}
+              suggestionsLimit={suggestionsLimit}
+            />
+          }
           {searching && <CircularProgress className={classes.loadingBar} color="primary" />}
-          {searchedCourses.map((course) => 
-            <CourseCard key={course.name} course={course} />
-          )}
+          <SearchResults courses={filteredCourses} />
         </Container>
+        <footer>
+          <Link href="https://github.com/StuffByLiang/ubc-course-search">Github</Link>,
+          <Link href="#" onClick={() => typeform.open()}>Feedback / suggestions</Link>,
+          <Link href="https://docs.ubccourses.com">UBC Courses API</Link>
+        </footer>
       </div>
     </ThemeProvider>
   );

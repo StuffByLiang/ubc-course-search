@@ -8,5 +8,5 @@ export interface Course {
   comments: Array<string>;
   endpoint: string;
   link: string;
-  lastUpdated?: Date;
+  lastUpdated?: string;
 }

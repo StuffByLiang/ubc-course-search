@@ -12,5 +12,5 @@ onmessage = (event) => {
   console.log('Sending message back to main script');
 
   // @ts-ignore
-  postMessage(results); // TODO: change targetOrigin -> doesnt matter because we dont have any sensitive data.
+  postMessage(results);
 }

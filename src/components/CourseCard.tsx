@@ -7,7 +7,6 @@ interface Props {
 }
 
 function CourseCard({ course }: Props) {
-  
   return (
     <Box
       mt={2}

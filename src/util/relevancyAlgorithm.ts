@@ -13,66 +13,102 @@ interface Result {
   score: number
 }
 
-export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, engineString: string, wordSet: Set<string>): Array<Course> {
+interface Suggestion {
+  query: Array<string>,
+  score: number
+}
+
+interface Output {
+  result: Array<Course>,
+  notFound: boolean,
+  suggestions: Array<string>
+}
+
+export function relevancyAlgorithm(searchQuery: string, allCourses: Array<Course>, engineString: string, wordSet: Set<string>): Output {
   /* 
    * 0. match all the words in the searchQuery to words in our set of words (tokenize the description)
    * 1. use tf-idf algorithm on description only to compute scores for each of the courses
-   * 2. sort and return top 10 relevant courses
+   * 2. sort and return
    */
-  console.time("get related words")
-
-  let list = new Array<string>();
-  let closestWord: string = ""; 
-  searchQuery.trim().split(' ').map((query) => {
-    let {
-      perfectMatches,
-      prefixMatches,
-      substringMatches,
-      closeMatches
-    } = getMatches(query, wordSet);
-
-    list = list.concat(perfectMatches.map((match) => match.word));
-    list = list.concat(prefixMatches.map((match) => match.word));
-    list = list.concat(substringMatches.map((match) => match.word));
-    if(closeMatches.length > 1) {
-    closestWord = closeMatches[0].word;
-    }
-    if(perfectMatches.length === 0 &&
-      prefixMatches.length === 0 &&
-      substringMatches.length === 0 &&
-      closeMatches.length > 1) {
-      list.push(closeMatches[0].word);
-    }
-    
-    // console.log("perfectMatch", perfectMatches)
-    // console.log("prefixMatches:", prefixMatches)
-    // console.log("substringMatches:", substringMatches)
-    // console.log("closeMatches:", closeMatches)
-  })
-  list = list.splice(0, 25)
-  console.log(list)
-  console.timeEnd("get related words")
+  console.time("get query suggestions")
+  let querySuggestions = getQuerySuggestions(searchQuery, wordSet);
+  console.timeEnd("get query suggestions")
 
   console.time("bm25 search")
-  let results: Array<Result> = bm25Search(allCourses, searchQuery, engineString);
+  let results: Array<Result> = querySuggestions.length === 0 ? [] : bm25Search(allCourses, querySuggestions[0], engineString, allCourses.length);
   console.log(results)
   console.timeEnd("bm25 search")
- 
-  if(results.length === 0) {
-    
-    //
-    // TODO: make this part below into a prompt 
-    // 
-    console.log(closestWord); 
-    results = bm25Search(allCourses, closestWord, engineString);  
+
+  return {
+    result: results.map((result) => {
+      return result.course;
+    }),
+    suggestions: querySuggestions,
+    notFound: !hasResult(searchQuery, wordSet)
+  }
+}
+
+/**
+ * Returns true if all words in searchQuery are in wordSet
+ * 
+ * @param  {string} searchQuery
+ * @param  {Set<string>} wordSet
+ * @returns boolean
+ */
+function hasResult(searchQuery: string, wordSet: Set<string>): boolean {
+  for (let word of searchQuery.trim().toLowerCase().split(' ')) {
+    if(!wordSet.has(word)) {
+      return false;
+    }
   }
 
-  return results.map((result) => {
-    return result.course;
-  });
+  return true;
+}
+
+function getQuerySuggestions(searchQuery: string, wordSet: Set<string>): Array<string> {
+  let listOfWords = searchQuery.trim().split(' ');
+
+  let closeWordsList: Array<Array<Match>> = listOfWords.map((query) => {
+    let limit = Math.max(1, Math.min(5, Math.floor(Math.pow(1000, 1/listOfWords.length))));
+    let wordSuggestions: Array<Match> = getMatches(query, wordSet)
+      .filter((match) => {
+        return match.score > 1.5;
+      })
+    return wordSuggestions.splice(0, limit)
+  })
+
+  let permutations = getPermutations([], closeWordsList);
+
+  permutations.sort((a, b) => b.score - a.score);
+
+  return permutations.map((suggestion) => suggestion.query.join(' '));
+}
+
+function getPermutations(resultSoFar: Array<Suggestion>, closeWordsList: Array<Array<Match>>): Array<Suggestion> {
+  if(closeWordsList.length === 0) {
+    return resultSoFar;
+  } else if (resultSoFar.length === 0) {
+    let result = closeWordsList[0].map(match => ({
+      query: [match.word],
+      score: match.score
+    }))
+    return getPermutations(result, closeWordsList.slice(1));
+  } else if (closeWordsList[0].length === 0) {
+    return getPermutations(resultSoFar, closeWordsList.slice(1));
+  } else {
+    let result = closeWordsList[0].map(match => {
+      return resultSoFar.map(suggestion => ({
+        query: [...suggestion.query, match.word],
+        score: suggestion.score * match.score
+      }))
+    });
+
+    return getPermutations(([] as Array<Suggestion>).concat(...result), closeWordsList.slice(1));
+  }
 }
 
 function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString: string, limit: number = 10): Array<Result>  {
+  console.log('search query: ' + searchQuery)
   const pipe = [
     nlp.string.lowerCase,
     nlp.string.tokenize0,
@@ -94,48 +130,30 @@ function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString
   return results;
 }
 
-// function tfidfSearch(allCourses: Array<Course>, searchQuery: string, engineString: string, limit: number = 10): Array<Result> {
-//   const tfidf = new TfIdf(JSON.parse(engineString));
-
-//   let results: Array<Result> = [];
-
-//   tfidf.tfidfs(searchQuery, (index, score) => {
-//     if(score !== 0) {
-//       results.push({
-//         course: allCourses[index],
-//         score
-//       });
-//     }
-//   });
-
-//   results = results.sort((a, b) => {
-//     return b.score - a.score;
-//   })
-
-//   return results.splice(0, limit);
-// } 
-
-function getMatches(query: string, wordSet: Set<string>) {
-  let results = Array.from(wordSet).map((word) => {
-    return {
-      word,
-      score: getMatchingScore(query, word)
-    }
-  }).sort((a, b) => {
-    return b.score - a.score;
-  })
-  
+/**
+ * Given a list of matches, determine which matches are
+ * perfect matches
+ * prefix matches
+ * substring matches
+ * close matches
+ */
+function getSortedMatches(matches: Array<Match>): {
+  perfectMatches: Array<Match>,
+  prefixMatches: Array<Match>,
+  substringMatches: Array<Match>,
+  closeMatches: Array<Match>
+} {
   let perfectMatches: Match[]           = [];
   let prefixMatches: Match[]          = [];
   let substringMatches: Match[]       = [];
   let closeMatches: Match[]           = [];
 
-  results.forEach((result : Match) => {
-    if (result.score === 3) {
+  matches.forEach((result : Match) => {
+    if (result.score === 4) {
       perfectMatches.push(result);
-    } else if(result.score > 2) {
+    } else if(result.score > 3) {
       prefixMatches.push(result);
-    } else if (result.score > 1) {
+    } else if (result.score > 2) {
       substringMatches.push(result);
     } else {
       closeMatches.push(result)
@@ -151,11 +169,31 @@ function getMatches(query: string, wordSet: Set<string>) {
 }
 
 /**
+ * Given a word and a wordset, return list of closest words with scores
+ * 
+ * @param  {string} query
+ * @param  {Set<string>} wordSet
+ * @returns Array
+ */
+function getMatches(query: string, wordSet: Set<string>): Array<Match> {
+  let results = Array.from(wordSet).map((word) => {
+    return {
+      word,
+      score: getMatchingScore(query, word)
+    }
+  }).sort((a, b) => {
+    return b.score - a.score;
+  })
+  
+  return results;
+}
+
+/**
  * gives a score representing how well a given word matches a target word in the following domain 
- *  - 3      - perfect match 
- *  - (2, 3) - given word is a prefix of the target word
- *  - (1, 2) - given word is a substring (but not prefix) of the target word
- *  - [0, 1) - target word can be obtained from the given word upon edits (aka levenshtein distance)
+ *  - 4      - perfect match 
+ *  - (3, 4) - given word is a prefix of the target word
+ *  - (2, 3) - given word is a substring (but not prefix) of the target word
+ *  - [1, 2) - target word can be obtained from the given word upon edits (aka levenshtein distance)
  * 
  * @param  {string} searchQuery
  * @param  {string} target
@@ -165,35 +203,16 @@ function getMatchingScore(searchQuery:string, target: string) : number {
   if (!target || !searchQuery) return 0;
 
   if (searchQuery === target) {
-    return 3;
+    return 4;
   }
 
   if (target.startsWith(searchQuery)) {
-    return 2 + searchQuery.length / target.length;
+    return 3 + searchQuery.length / target.length;
   }
 
   if (target.includes(searchQuery)) {
-    return 1 + searchQuery.length / target.length;
+    return 2 + searchQuery.length / target.length;
   }
 
-  return 1 - LevenshteinDistance(searchQuery, target)/target.length;
-}
-
-/**
- * returns how many times sub_str is in main_str
- * 
- * @param  {string} main_str
- * @param  {string} sub_str
- * @returns number
- */
-function count(main_str: string, sub_str: string ): number {
-  main_str += '';
-  sub_str += '';
-
-  if (sub_str.length <= 0) {
-    return main_str.length + 1;
-  }
-
-  let subStr = sub_str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return (main_str.match(new RegExp(subStr, 'gi')) || []).length;
+  return 2 - LevenshteinDistance(searchQuery, target)/target.length;
 }

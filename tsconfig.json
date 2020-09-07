@@ -22,5 +22,6 @@
   "include": [
     "src",
     "src/_types/modules.d.ts"
-  ]
+  ],
+  "forceConsistentCasingInFileNames": false,
 }
