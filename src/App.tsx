@@ -226,6 +226,7 @@ function App() {
         <Container className="center">
           {(filteredCourses.length !== 0 || notFound) &&
             <SearchSuggestionBox
+              setSearchQuery={setSearchQuery}
               notFound={notFound}
               suggestions={suggestions}
               suggestionsLimit={suggestionsLimit}

@@ -58,7 +58,7 @@ footer {
   width: 100%;
   text-align: center;
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: 10px 0;
 }
 
 footer a{
