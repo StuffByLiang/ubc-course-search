@@ -127,6 +127,7 @@ function bm25Search(allCourses: Array<Course>, searchQuery: string, engineString
       };
     });
    
+   
   return results;
 }
 
