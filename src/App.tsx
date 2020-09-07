@@ -4,7 +4,7 @@ import logo from './logo_white.svg';
 import './App.css';
 
 import { Course } from './_types/';
-import { Link, Container, ThemeProvider, createMuiTheme, InputBase, Paper, makeStyles, Collapse, IconButton, Divider, FormControl, InputLabel, Select, MenuItem, LinearProgress, CircularProgress, Grid } from '@material-ui/core';
+import { Link, Container, ThemeProvider, createMuiTheme, InputBase, Paper, makeStyles, Collapse, IconButton, Divider, CircularProgress, Grid } from '@material-ui/core';
 import MoreVertIcon from '@material-ui/icons/MoreVert';
 import Box from '@material-ui/core/Box';
 import SearchIcon from '@material-ui/icons/Search';
@@ -84,7 +84,6 @@ const typeform = typeformEmbed.makePopup(
 
 function App() {
   const classes = useStyles();
-  console.log("hello")
 
   // const [allCourses, setAllCourses] = useState<Array<Course>>([]);
   const [searchedCourses, setSearchedCourses] = useState<Course[]>([]);
@@ -108,8 +107,6 @@ function App() {
     // set up worker listener
     worker.onmessage = function (event: MessageEvent) {
       console.timeEnd("recieved data from worker")
-
-      console.log(event.data);
       
       setSearchedCourses(event.data.result);
       setSuggestions(event.data.suggestions)
@@ -132,12 +129,10 @@ function App() {
         newWordSet.add(word.toLowerCase()); 
       })
     })
-    console.log(newWordSet);
     setWordSet(newWordSet); 
   }, []);
 
   useEffect(() => {
-    console.log('run algo')
     // tell worker to run algorithm
     if(debouncedSearchTerm !== "") {
       console.time("recieved data from worker")
@@ -173,7 +168,6 @@ function App() {
     }
 
     // run when filter options have been updated
-    console.log('run filter')
     let result = filterCourses(searchedCourses, subjectSetFilter, courseLevelRange);
     result = result.splice(0, debouncedDisplayLimit);
     setFilteredCourses(result);
@@ -236,9 +230,11 @@ function App() {
           <SearchResults courses={filteredCourses} />
         </Container>
         <footer>
-          <Link href="https://github.com/StuffByLiang/ubc-course-search">Github</Link>,
-          <Link href="#" onClick={() => typeform.open()}>Feedback / suggestions</Link>,
-          <Link href="https://docs.ubccourses.com">UBC Courses API</Link>
+            <Link className="links" href="https://github.com/StuffByLiang/ubc-course-search">Github</Link>,
+            <Link className="links" href="#" onClick={() => typeform.open()}>Feedback / suggestions</Link>,
+            <Link className="links" href="https://docs.ubccourses.com">UBC Courses API</Link>
+            <br />
+            Made with love by <Link href="https://stufbyliang.com">Liang</Link> and <Link href="https://github.com/Adrian587">Adrian</Link>
         </footer>
       </div>
     </ThemeProvider>

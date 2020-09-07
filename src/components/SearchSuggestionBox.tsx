@@ -9,7 +9,6 @@ interface Props {
 }
 
 function SearchSuggestionsBox({ notFound, suggestions, suggestionsLimit, setSearchQuery }: Props) {
-console.log(suggestions)
 return (
   <Box
     mt={2}

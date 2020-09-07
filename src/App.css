@@ -58,9 +58,9 @@ footer {
   width: 100%;
   text-align: center;
   margin-top: auto;
-  padding-top: 10px 0;
+  padding: 10px 0;
 }
 
-footer a{
+footer a.links{
   margin-left: 7px!important;
 }
