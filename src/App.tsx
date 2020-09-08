@@ -140,7 +140,7 @@ function App() {
       let engineString = engine.exportJSON();
       
       worker.postMessage({
-        searchQuery, allCourses, engineString,  wordSet
+        searchQuery: searchQuery.toLowerCase(), allCourses, engineString,  wordSet
       });
       setSearching(true);
       console.timeEnd('worker start')
@@ -234,7 +234,7 @@ function App() {
             <Link className="links" href="#" onClick={() => typeform.open()}>Feedback / suggestions</Link>,
             <Link className="links" href="https://docs.ubccourses.com">UBC Courses API</Link>
             <br />
-            Made with love by <Link href="https://stufbyliang.com">Liang</Link> and <Link href="https://github.com/Adrian587">Adrian</Link>
+            Made with love by <Link href="https://stuffbyliang.com">Liang</Link> and <Link href="https://github.com/Adrian587">Adrian</Link>
         </footer>
       </div>
     </ThemeProvider>
